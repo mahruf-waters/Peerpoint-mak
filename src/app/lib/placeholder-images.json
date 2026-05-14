@@ -24,6 +24,18 @@
       "description": "A quiet, professional examination hall environment.",
       "imageUrl": "https://picsum.photos/seed/exam/600/400",
       "imageHint": "exam hall"
+    },
+    {
+      "id": "global-news",
+      "description": "Modern digital news interface with global headlines.",
+      "imageUrl": "https://picsum.photos/seed/news/800/600",
+      "imageHint": "world news"
+    },
+    {
+      "id": "world-events",
+      "description": "Large international conference hall with flags.",
+      "imageUrl": "https://picsum.photos/seed/events/800/600",
+      "imageHint": "global event"
     }
   ]
 }

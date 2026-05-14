@@ -13,7 +13,8 @@ import {
   LogOut,
   Menu,
   X,
-  Lightbulb
+  Lightbulb,
+  Globe
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -25,6 +26,7 @@ const navItems = [
   { name: "Forum", href: "/forum", icon: MessageSquare },
   { name: "Quizzes", href: "/quizzes", icon: Trophy },
   { name: "General Knowledge", href: "/gk", icon: Lightbulb },
+  { name: "News & Events", href: "/news-and-events", icon: Globe },
   { name: "AI Tutor", href: "/ai-tutor", icon: BrainCircuit },
   { name: "Profile", href: "/profile", icon: User },
 ];
