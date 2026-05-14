@@ -1,27 +1,30 @@
-
 "use client";
 
 import { useState, useRef, useEffect } from "react";
 import { academicQuestionAssistant } from "@/ai/flows/ai-academic-question-assistant";
 import { aiPastPaperExplanation } from "@/ai/flows/ai-past-paper-explanation";
+import { generateSpeech } from "@/ai/flows/ai-tts-flow";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BrainCircuit, Send, Loader2, User, Sparkles, AlertCircle } from "lucide-react";
+import { BrainCircuit, Send, Loader2, User, Sparkles, AlertCircle, Volume2, StopCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 
 type Message = {
   role: "user" | "assistant";
   content: string;
+  audioUri?: string;
 };
 
 export default function AITutor() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState<number | null>(null);
   const [complexAnswer, setComplexAnswer] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
 
   const scrollToBottom = () => {
@@ -80,8 +83,49 @@ export default function AITutor() {
     }
   };
 
+  const handlePlayVoice = async (index: number, text: string) => {
+    if (isPlayingAudio === index) {
+      audioRef.current?.pause();
+      setIsPlayingAudio(null);
+      return;
+    }
+
+    const message = messages[index];
+    
+    try {
+      let uri = message.audioUri;
+      if (!uri) {
+        setIsLoading(true);
+        const speech = await generateSpeech(text);
+        uri = speech.audioUri;
+        // Update message with cached audio URI
+        setMessages(prev => prev.map((msg, i) => i === index ? { ...msg, audioUri: uri } : msg));
+      }
+
+      if (audioRef.current) {
+        audioRef.current.src = uri!;
+        audioRef.current.play();
+        setIsPlayingAudio(index);
+      }
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Audio Error",
+        description: "Failed to generate voice for this message.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <audio 
+        ref={audioRef} 
+        onEnded={() => setIsPlayingAudio(null)} 
+        className="hidden" 
+      />
+      
       <div className="flex items-center gap-4 mb-8">
         <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white shadow-lg">
           <BrainCircuit className="w-10 h-10" />
@@ -117,12 +161,26 @@ export default function AITutor() {
                       <Sparkles className="w-4 h-4 text-white" />
                     </div>
                   )}
-                  <div className={`max-w-[80%] p-4 rounded-2xl ${
+                  <div className={`max-w-[80%] p-4 rounded-2xl relative group ${
                     msg.role === 'user' 
                       ? 'bg-primary text-primary-foreground rounded-tr-none' 
                       : 'bg-secondary text-foreground rounded-tl-none'
                   }`}>
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    {msg.role === 'assistant' && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="absolute -right-10 top-0 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 rounded-full hover:bg-primary/10"
+                        onClick={() => handlePlayVoice(i, msg.content)}
+                      >
+                        {isPlayingAudio === i ? (
+                          <StopCircle className="w-4 h-4 text-primary" />
+                        ) : (
+                          <Volume2 className="w-4 h-4 text-muted-foreground hover:text-primary" />
+                        )}
+                      </Button>
+                    )}
                   </div>
                   {msg.role === 'user' && (
                     <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center shrink-0">
@@ -208,9 +266,23 @@ export default function AITutor() {
           </Card>
           
           {messages.length > 0 && messages[messages.length-1].role === 'assistant' && (
-            <Card className="border-none shadow-md bg-primary text-primary-foreground animate-in zoom-in-95">
+            <Card className="border-none shadow-md bg-primary text-primary-foreground animate-in zoom-in-95 group relative">
               <CardContent className="p-6 space-y-4">
-                <h3 className="text-xl font-headline font-bold">Detailed Explanation</h3>
+                <div className="flex justify-between items-start">
+                  <h3 className="text-xl font-headline font-bold">Detailed Explanation</h3>
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    className="rounded-full h-10 w-10 shrink-0"
+                    onClick={() => handlePlayVoice(messages.length - 1, messages[messages.length - 1].content)}
+                  >
+                    {isPlayingAudio === messages.length - 1 ? (
+                      <StopCircle className="w-5 h-5" />
+                    ) : (
+                      <Volume2 className="w-5 h-5" />
+                    )}
+                  </Button>
+                </div>
                 <p className="text-sm leading-relaxed opacity-90 whitespace-pre-wrap">
                   {messages[messages.length-1].content}
                 </p>
