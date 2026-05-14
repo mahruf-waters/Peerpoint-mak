@@ -1,0 +1,29 @@
+
+{
+  "placeholderImages": [
+    {
+      "id": "hero-student",
+      "description": "A determined Ugandan student studying with books and a laptop in a modern library setting.",
+      "imageUrl": "https://picsum.photos/seed/peerpoint1/1200/800",
+      "imageHint": "student studying"
+    },
+    {
+      "id": "university-makerere",
+      "description": "Iconic Ivory Tower of Makerere University.",
+      "imageUrl": "https://picsum.photos/seed/makerere/600/400",
+      "imageHint": "university building"
+    },
+    {
+      "id": "study-group",
+      "description": "A group of diverse students collaborating and discussing academic papers.",
+      "imageUrl": "https://picsum.photos/seed/group/600/400",
+      "imageHint": "students collaborating"
+    },
+    {
+      "id": "exam-hall",
+      "description": "A quiet, professional examination hall environment.",
+      "imageUrl": "https://picsum.photos/seed/exam/600/400",
+      "imageHint": "exam hall"
+    }
+  ]
+}
