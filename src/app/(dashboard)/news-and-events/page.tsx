@@ -86,6 +86,13 @@ const events = [
   }
 ];
 
+const trustedSources = [
+  { name: "BBC World News", url: "https://www.bbc.com/news" },
+  { name: "Al Jazeera", url: "https://www.aljazeera.com" },
+  { name: "Makerere News Portal", url: "https://news.mak.ac.ug" },
+  { name: "Daily Monitor", url: "https://www.monitor.co.ug" },
+];
+
 export default function NewsAndEventsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const newsHeaderImg = PlaceHolderImages.find(img => img.id === "global-news");
@@ -225,14 +232,17 @@ export default function NewsAndEventsPage() {
           <div className="space-y-2">
             <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider ml-1">Trusted Sources</h4>
             <div className="grid grid-cols-1 gap-2">
-              {["BBC World News", "Al Jazeera", "Makerere News Portal", "Daily Monitor"].map((site) => (
+              {trustedSources.map((site) => (
                 <Button 
-                  key={site} 
+                  key={site.name} 
                   variant="ghost" 
                   className="justify-between h-10 px-3 hover:bg-secondary text-sm font-medium"
+                  asChild
                 >
-                  {site}
-                  <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                  <a href={site.url} target="_blank" rel="noopener noreferrer">
+                    {site.name}
+                    <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                  </a>
                 </Button>
               ))}
             </div>
