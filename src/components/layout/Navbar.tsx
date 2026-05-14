@@ -12,7 +12,8 @@ import {
   BrainCircuit,
   LogOut,
   Menu,
-  X
+  X,
+  Lightbulb
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -23,6 +24,7 @@ const navItems = [
   { name: "Library", href: "/library", icon: BookOpen },
   { name: "Forum", href: "/forum", icon: MessageSquare },
   { name: "Quizzes", href: "/quizzes", icon: Trophy },
+  { name: "General Knowledge", href: "/gk", icon: Lightbulb },
   { name: "AI Tutor", href: "/ai-tutor", icon: BrainCircuit },
   { name: "Profile", href: "/profile", icon: User },
 ];
