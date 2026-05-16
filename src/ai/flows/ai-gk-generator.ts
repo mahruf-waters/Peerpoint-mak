@@ -1,8 +1,7 @@
 'use server';
 /**
  * @fileOverview An AI flow that generates category-specific General Knowledge questions.
- *
- * - generateGKQuestions - A function that returns dynamic questions for a given GK category.
+ * Includes retry logic to handle API rate limits (Quota Exhaustion).
  */
 
 import { ai } from '@/ai/genkit';
@@ -29,8 +28,29 @@ const GKGeneratorOutputSchema = z.object({
 export type GKQuestion = z.infer<typeof GKQuestionSchema>;
 export type GKGeneratorOutput = z.infer<typeof GKGeneratorOutputSchema>;
 
+/**
+ * Retries an async function with exponential backoff.
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      // If it's a 429 error, wait and retry
+      if (err.message?.includes('429') || err.message?.includes('quota')) {
+        await new Promise((resolve) => setTimeout(resolve, delay * Math.pow(2, i)));
+        continue;
+      }
+      throw err; // For other errors, throw immediately
+    }
+  }
+  throw lastError;
+}
+
 export async function generateGKQuestions(category: string, count: number = 5): Promise<GKGeneratorOutput> {
-  return gkGeneratorFlow({ category, count });
+  return withRetry(() => gkGeneratorFlow({ category, count }));
 }
 
 const gkGeneratorFlow = ai.defineFlow(

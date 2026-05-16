@@ -17,7 +17,8 @@ import {
   MapPin,
   Loader2,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle
 } from "lucide-react";
 import Image from "next/image";
 import { getLiveNewsFeed, type NewsFeedOutput } from "@/ai/flows/ai-news-feed";
@@ -36,27 +37,36 @@ export default function NewsAndEventsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [data, setData] = useState<NewsFeedOutput | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isQuotaExhausted, setIsQuotaExhausted] = useState(false);
   const { toast } = useToast();
 
   const fetchNews = useCallback(async (isAuto = false) => {
-    // If it's the very first load and we have no data
     if (!data && !isAuto) {
       setIsLoading(true);
     }
-    
-    // Indicate a background refresh is happening
     setIsRefreshing(true);
     
     try {
       const result = await getLiveNewsFeed();
       setData(result);
       setLastUpdated(new Date());
-    } catch (error) {
-      if (!isAuto) {
+      setIsQuotaExhausted(false);
+    } catch (error: any) {
+      // Handle quota errors specifically
+      if (error.message?.includes('429') || error.message?.includes('quota')) {
+        setIsQuotaExhausted(true);
+        if (!isAuto) {
+          toast({
+            variant: "destructive",
+            title: "AI Busy",
+            description: "Sync limit reached. Please wait a few moments before trying again.",
+          });
+        }
+      } else if (!isAuto) {
         toast({
           variant: "destructive",
           title: "Feed Error",
-          description: "Could not fetch live updates. Please try again later.",
+          description: "Could not fetch live updates. Using last known data.",
         });
       }
     } finally {
@@ -66,10 +76,9 @@ export default function NewsAndEventsPage() {
   }, [data, toast]);
 
   useEffect(() => {
-    // Initial fetch
     fetchNews();
 
-    // Set up auto-synchronization every 5 minutes (300,000 ms)
+    // Auto-sync every 5 minutes
     const interval = setInterval(() => {
       fetchNews(true);
     }, 300000);
@@ -84,7 +93,6 @@ export default function NewsAndEventsPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      {/* Page Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-3xl font-headline font-bold text-primary">Live News & Academic Events</h1>
@@ -94,6 +102,12 @@ export default function NewsAndEventsPage() {
               <span className="text-[10px] bg-secondary px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
                 <CheckCircle2 className="w-3 h-3 text-green-600" />
                 Synced {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            {isQuotaExhausted && (
+              <span className="text-[10px] bg-destructive/10 text-destructive px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                <AlertTriangle className="w-3 h-3" />
+                Sync Paused (AI Busy)
               </span>
             )}
           </div>
@@ -116,12 +130,6 @@ export default function NewsAndEventsPage() {
             disabled={isRefreshing}
           >
             <RefreshCw className={`w-5 h-5 ${isRefreshing ? "animate-spin" : ""}`} />
-            {isRefreshing && (
-              <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-              </span>
-            )}
           </Button>
           <Button variant="outline" size="icon" className="rounded-xl h-11 w-11">
             <Bell className="w-5 h-5" />
@@ -138,7 +146,6 @@ export default function NewsAndEventsPage() {
         </div>
       ) : (
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* News Feed */}
           <div className="lg:col-span-2 space-y-6">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -189,18 +196,16 @@ export default function NewsAndEventsPage() {
                   </CardContent>
                 </Card>
               ))}
-              {filteredNews?.length === 0 && (
+              {filteredNews?.length === 0 && !data && (
                 <div className="text-center py-20 opacity-50">
-                  <Globe className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                  <p>No news items match your search.</p>
+                  <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <p>Feed is temporarily unavailable due to high demand. Please refresh shortly.</p>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Sidebar: Events & Calendar */}
           <div className="space-y-8">
-            {/* Timeline Section */}
             <Card className="border-none shadow-sm overflow-hidden">
               <CardHeader className="bg-secondary/30">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -234,7 +239,6 @@ export default function NewsAndEventsPage() {
               </CardContent>
             </Card>
 
-            {/* Quick Newsletter */}
             <Card className="bg-primary text-primary-foreground border-none shadow-xl overflow-hidden relative">
               <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
                 <Globe className="w-24 h-24" />
@@ -251,7 +255,6 @@ export default function NewsAndEventsPage() {
               </CardContent>
             </Card>
 
-            {/* External Links */}
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider ml-1">Trusted Sources</h4>
               <div className="grid grid-cols-1 gap-2">

@@ -13,7 +13,8 @@ import {
   Sparkles,
   Info,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  RefreshCcw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { generateGKQuestions, type GKQuestion } from "@/ai/flows/ai-gk-generator";
@@ -47,13 +48,15 @@ export function GKQuizModule({ category, onComplete, onClose }: GKQuizModuleProp
       } else {
         throw new Error("No questions returned");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Failed to load questions. Please try again.");
+      const isQuotaError = err.message?.includes('429') || err.message?.includes('quota');
+      setError(isQuotaError ? "The AI tutor is currently busy handling many students. Please wait a moment and try again." : "Failed to load questions. Please check your connection.");
+      
       toast({
         variant: "destructive",
-        title: "Load Error",
-        description: "Could not generate questions for this category.",
+        title: isQuotaError ? "AI Busy" : "Load Error",
+        description: isQuotaError ? "Service quota reached. Please retry in a few seconds." : "Could not generate questions.",
       });
     } finally {
       setIsLoading(false);
@@ -115,12 +118,15 @@ export function GKQuizModule({ category, onComplete, onClose }: GKQuizModuleProp
         <CardContent className="pt-12 pb-12 flex flex-col items-center justify-center space-y-6 text-center">
           <AlertCircle className="w-16 h-16 text-destructive" />
           <div className="space-y-2">
-            <h3 className="text-xl font-bold">Something went wrong</h3>
-            <p className="text-muted-foreground">{error}</p>
+            <h3 className="text-xl font-bold">Training Interrupted</h3>
+            <p className="text-muted-foreground max-w-sm mx-auto">{error}</p>
           </div>
           <div className="flex gap-4">
-            <Button variant="outline" onClick={onClose}>Go Back</Button>
-            <Button onClick={loadQuestions}>Retry</Button>
+            <Button variant="outline" onClick={onClose} className="rounded-xl">Exit Hub</Button>
+            <Button onClick={loadQuestions} className="rounded-xl gap-2">
+              <RefreshCcw className="w-4 h-4" />
+              Try Again
+            </Button>
           </div>
         </CardContent>
       </Card>
