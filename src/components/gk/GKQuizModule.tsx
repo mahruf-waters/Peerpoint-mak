@@ -1,7 +1,6 @@
-
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -12,18 +11,13 @@ import {
   ArrowRight, 
   Trophy, 
   Sparkles,
-  Info
+  Info,
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type Question = {
-  id: string;
-  question: string;
-  options: string[];
-  correctAnswer: string;
-  explanation: string;
-  category: string;
-};
+import { generateGKQuestions, type GKQuestion } from "@/ai/flows/ai-gk-generator";
+import { useToast } from "@/hooks/use-toast";
 
 type GKQuizModuleProps = {
   category: string;
@@ -31,54 +25,55 @@ type GKQuizModuleProps = {
   onClose: () => void;
 };
 
-const MOCK_QUESTIONS: Record<string, Question[]> = {
-  "Uganda Knowledge": [
-    {
-      id: "1",
-      question: "Which explorer is famously associated with 'discovering' the source of the Nile at Jinja?",
-      options: ["John Speke", "Samuel Baker", "Henry Morton Stanley", "David Livingstone"],
-      correctAnswer: "John Speke",
-      explanation: "John Hanning Speke was the first European to reach Lake Victoria and identify it as the source of the Nile in 1858.",
-      category: "Uganda Knowledge"
-    },
-    {
-      id: "2",
-      question: "In what year did Uganda gain independence from British colonial rule?",
-      options: ["1960", "1962", "1964", "1958"],
-      correctAnswer: "1962",
-      explanation: "Uganda became an independent nation within the Commonwealth on October 9, 1962.",
-      category: "Uganda Knowledge"
-    }
-  ],
-  "Logical Reasoning": [
-    {
-      id: "3",
-      question: "If all Bloops are Razzies and all Razzies are Lazzies, then all Bloops are definitely Lazzies.",
-      options: ["True", "False"],
-      correctAnswer: "True",
-      explanation: "This is a transitive syllogism. If A=B and B=C, then A=C.",
-      category: "Logical Reasoning"
-    }
-  ]
-};
-
 export function GKQuizModule({ category, onComplete, onClose }: GKQuizModuleProps) {
-  const questions = MOCK_QUESTIONS[category] || MOCK_QUESTIONS["Uganda Knowledge"];
+  const [questions, setQuestions] = useState<GKQuestion[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(30);
   const [isFinished, setIsFinished] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const loadQuestions = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await generateGKQuestions(category);
+      if (result.questions && result.questions.length > 0) {
+        setQuestions(result.questions);
+      } else {
+        throw new Error("No questions returned");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load questions. Please try again.");
+      toast({
+        variant: "destructive",
+        title: "Load Error",
+        description: "Could not generate questions for this category.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [category, toast]);
 
   useEffect(() => {
-    if (timeLeft > 0 && !isAnswered && !isFinished) {
+    loadQuestions();
+  }, [loadQuestions]);
+
+  useEffect(() => {
+    if (questions.length === 0 || isFinished || isAnswered || isLoading) return;
+
+    if (timeLeft > 0) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && !isAnswered) {
+    } else {
       handleAnswer(null);
     }
-  }, [timeLeft, isAnswered, isFinished]);
+  }, [timeLeft, isAnswered, isFinished, questions.length, isLoading]);
 
   const handleAnswer = (option: string | null) => {
     if (isAnswered) return;
@@ -101,6 +96,37 @@ export function GKQuizModule({ category, onComplete, onClose }: GKQuizModuleProp
     }
   };
 
+  if (isLoading) {
+    return (
+      <Card className="max-w-2xl mx-auto border-none shadow-lg">
+        <CardContent className="pt-20 pb-20 flex flex-col items-center justify-center space-y-4">
+          <Loader2 className="w-12 h-12 text-primary animate-spin" />
+          <p className="text-muted-foreground font-medium animate-pulse">
+            AI is crafting unique questions for {category}...
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="max-w-2xl mx-auto border-none shadow-lg bg-destructive/5">
+        <CardContent className="pt-12 pb-12 flex flex-col items-center justify-center space-y-6 text-center">
+          <AlertCircle className="w-16 h-16 text-destructive" />
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold">Something went wrong</h3>
+            <p className="text-muted-foreground">{error}</p>
+          </div>
+          <div className="flex gap-4">
+            <Button variant="outline" onClick={onClose}>Go Back</Button>
+            <Button onClick={loadQuestions}>Retry</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (isFinished) {
     const percentage = Math.round((score / questions.length) * 100);
     return (
@@ -114,10 +140,12 @@ export function GKQuizModule({ category, onComplete, onClose }: GKQuizModuleProp
             <p className="text-muted-foreground">You scored {score} out of {questions.length}</p>
           </div>
           <div className="text-5xl font-bold text-accent">{percentage}%</div>
-          <div className="bg-secondary/30 p-4 rounded-xl text-sm">
-            {percentage >= 70 ? "Excellent work! You're showing great mastery of this category." : "Good effort! A little more revision on these topics will go a long way."}
+          <div className="bg-secondary/30 p-4 rounded-xl text-sm leading-relaxed">
+            {percentage >= 70 
+              ? "Excellent work! You're showing great mastery of this category." 
+              : "Good effort! A little more revision on these topics will go a long way."}
           </div>
-          <Button onClick={onClose} className="w-full h-12 rounded-xl">Back to Dashboard</Button>
+          <Button onClick={onClose} className="w-full h-12 rounded-xl">Back to Training</Button>
         </CardContent>
       </Card>
     );
@@ -152,7 +180,7 @@ export function GKQuizModule({ category, onComplete, onClose }: GKQuizModuleProp
               
               let variantClasses = "border-2 bg-background hover:border-primary/50 text-foreground";
               if (isAnswered) {
-                if (isCorrect) variantClasses = "border-green-500 bg-green-50 text-green-700";
+                if (isCorrect) variantClasses = "border-green-500 bg-green-50 text-green-700 shadow-[0_0_10px_rgba(34,197,94,0.2)]";
                 else if (isSelected) variantClasses = "border-red-500 bg-red-50 text-red-700";
                 else variantClasses = "opacity-50 grayscale-[0.5]";
               }
@@ -167,9 +195,9 @@ export function GKQuizModule({ category, onComplete, onClose }: GKQuizModuleProp
                     variantClasses
                   )}
                 >
-                  {opt}
-                  {isAnswered && isCorrect && <CheckCircle2 className="w-5 h-5 text-green-500" />}
-                  {isAnswered && isSelected && !isCorrect && <XCircle className="w-5 h-5 text-red-500" />}
+                  <span className="flex-1 pr-4">{opt}</span>
+                  {isAnswered && isCorrect && <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />}
+                  {isAnswered && isSelected && !isCorrect && <XCircle className="w-5 h-5 text-red-500 shrink-0" />}
                 </button>
               );
             })}
@@ -186,7 +214,7 @@ export function GKQuizModule({ category, onComplete, onClose }: GKQuizModuleProp
                   {q.explanation}
                 </p>
               </div>
-              <Button onClick={handleNext} className="w-full mt-6 h-12 rounded-xl group">
+              <Button onClick={handleNext} className="w-full mt-6 h-12 rounded-xl group bg-primary text-white hover:bg-primary/90">
                 {currentIdx + 1 === questions.length ? "Finish Quiz" : "Next Question"}
                 <ArrowRight className="ml-2 w-4 h-4 transition-transform group-hover:translate-x-1" />
               </Button>
