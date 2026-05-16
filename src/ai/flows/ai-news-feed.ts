@@ -1,8 +1,7 @@
 'use server';
 /**
  * @fileOverview An AI flow that generates a live-feeling news and events feed.
- * 
- * - getLiveNewsFeed - A function that returns current news and events.
+ * Includes retry logic to handle API rate limits.
  */
 
 import { ai } from '@/ai/genkit';
@@ -30,8 +29,30 @@ const NewsFeedOutputSchema = z.object({
 
 export type NewsFeedOutput = z.infer<typeof NewsFeedOutputSchema>;
 
+/**
+ * Retries an async function with exponential backoff.
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 5, delay = 2000): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const errorMessage = err.message || String(err);
+      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+        const waitTime = delay * Math.pow(2, i);
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 export async function getLiveNewsFeed(): Promise<NewsFeedOutput> {
-  return aiLiveNewsFeedFlow({});
+  return withRetry(() => aiLiveNewsFeedFlow({}));
 }
 
 const aiLiveNewsFeedFlow = ai.defineFlow(

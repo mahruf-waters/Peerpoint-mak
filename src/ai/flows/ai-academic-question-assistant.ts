@@ -1,10 +1,7 @@
 'use server';
 /**
  * @fileOverview An AI assistant that answers academic questions for students.
- *
- * - academicQuestionAssistant - A function that handles academic questions.
- * - AcademicQuestionAssistantInput - The input type for the academicQuestionAssistant function.
- * - AcademicQuestionAssistantOutput - The return type for the academicQuestionAssistant function.
+ * Includes retry logic for API rate limits.
  */
 
 import {ai} from '@/ai/genkit';
@@ -32,10 +29,29 @@ export type AcademicQuestionAssistantOutput = z.infer<
   typeof AcademicQuestionAssistantOutputSchema
 >;
 
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 5, delay = 2000): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const errorMessage = err.message || String(err);
+      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+        const waitTime = delay * Math.pow(2, i);
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 export async function academicQuestionAssistant(
   input: AcademicQuestionAssistantInput
 ): Promise<AcademicQuestionAssistantOutput> {
-  return academicQuestionAssistantFlow(input);
+  return withRetry(() => academicQuestionAssistantFlow(input));
 }
 
 const academicQuestionAssistantPrompt = ai.definePrompt({
