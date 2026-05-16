@@ -1,7 +1,7 @@
 'use server';
 /**
  * @fileOverview An AI flow that generates category-specific General Knowledge questions.
- * Includes retry logic to handle API rate limits (Quota Exhaustion).
+ * Includes optimized retry logic for Next.js Server Action compatibility.
  */
 
 import { ai } from '@/ai/genkit';
@@ -29,10 +29,10 @@ export type GKQuestion = z.infer<typeof GKQuestionSchema>;
 export type GKGeneratorOutput = z.infer<typeof GKGeneratorOutputSchema>;
 
 /**
- * Retries an async function with exponential backoff.
- * Optimized for handling 429 Resource Exhausted errors.
+ * Standardized retry utility for Server Actions.
+ * Optimized to stay within the 30s timeout window.
  */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries = 5, delay = 2000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
   let lastError: any;
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -40,13 +40,12 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries = 5, delay = 2000):
     } catch (err: any) {
       lastError = err;
       const errorMessage = err.message || String(err);
-      // If it's a 429 error or quota issue, wait and retry
       if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
         const waitTime = delay * Math.pow(2, i);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
         continue;
       }
-      throw err; // For other errors, throw immediately
+      throw err;
     }
   }
   throw lastError;
@@ -82,6 +81,7 @@ const gkGeneratorFlow = ai.defineFlow(
       throw new Error('Failed to generate GK questions.');
     }
 
-    return output;
+    // Ensure serializable output
+    return JSON.parse(JSON.stringify(output));
   }
 );

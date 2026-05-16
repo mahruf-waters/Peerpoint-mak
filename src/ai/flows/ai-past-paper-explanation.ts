@@ -1,10 +1,7 @@
 'use server';
 /**
  * @fileOverview An AI assistant that provides detailed step-by-step explanations for complex past paper answers.
- *
- * - aiPastPaperExplanation - A function that handles the generation of detailed explanations.
- * - AiPastPaperExplanationInput - The input type for the aiPastPaperExplanation function.
- * - AiPastPaperExplanationOutput - The return type for the aiPastPaperExplanation function.
+ * Includes retry logic for robust server action execution.
  */
 
 import {ai} from '@/ai/genkit';
@@ -31,10 +28,29 @@ export type AiPastPaperExplanationOutput = z.infer<
   typeof AiPastPaperExplanationOutputSchema
 >;
 
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const errorMessage = err.message || String(err);
+      if (errorMessage.includes('429') || errorMessage.includes('quota') || errorMessage.includes('RESOURCE_EXHAUSTED')) {
+        const waitTime = delay * Math.pow(2, i);
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
 export async function aiPastPaperExplanation(
   input: AiPastPaperExplanationInput
 ): Promise<AiPastPaperExplanationOutput> {
-  return aiPastPaperExplanationFlow(input);
+  return withRetry(() => aiPastPaperExplanationFlow(input));
 }
 
 const prompt = ai.definePrompt({
@@ -60,6 +76,7 @@ const aiPastPaperExplanationFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    if (!output) throw new Error('Failed to generate explanation');
+    return JSON.parse(JSON.stringify(output));
   }
 );
