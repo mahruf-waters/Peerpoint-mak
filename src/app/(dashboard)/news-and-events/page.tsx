@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,8 @@ import {
   Bell,
   MapPin,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2
 } from "lucide-react";
 import Image from "next/image";
 import { getLiveNewsFeed, type NewsFeedOutput } from "@/ai/flows/ai-news-feed";
@@ -32,28 +33,49 @@ const trustedSources = [
 export default function NewsAndEventsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [data, setData] = useState<NewsFeedOutput | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const { toast } = useToast();
 
-  const fetchNews = async () => {
-    setIsLoading(true);
+  const fetchNews = useCallback(async (isAuto = false) => {
+    // If it's the very first load and we have no data
+    if (!data && !isAuto) {
+      setIsLoading(true);
+    }
+    
+    // Indicate a background refresh is happening
+    setIsRefreshing(true);
+    
     try {
       const result = await getLiveNewsFeed();
       setData(result);
+      setLastUpdated(new Date());
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Feed Error",
-        description: "Could not fetch live updates. Using backup data.",
-      });
+      if (!isAuto) {
+        toast({
+          variant: "destructive",
+          title: "Feed Error",
+          description: "Could not fetch live updates. Please try again later.",
+        });
+      }
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  };
+  }, [data, toast]);
 
   useEffect(() => {
+    // Initial fetch
     fetchNews();
-  }, []);
+
+    // Set up auto-synchronization every 5 minutes (300,000 ms)
+    const interval = setInterval(() => {
+      fetchNews(true);
+    }, 300000);
+
+    return () => clearInterval(interval);
+  }, [fetchNews]);
 
   const filteredNews = data?.news.filter(n => 
     n.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -66,7 +88,15 @@ export default function NewsAndEventsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-3xl font-headline font-bold text-primary">Live News & Academic Events</h1>
-          <p className="text-muted-foreground">AI-curated world affairs and university schedules for your preparation.</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-muted-foreground">AI-curated world affairs and university schedules.</p>
+            {lastUpdated && (
+              <span className="text-[10px] bg-secondary px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                <CheckCircle2 className="w-3 h-3 text-green-600" />
+                Synced {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative">
@@ -81,11 +111,17 @@ export default function NewsAndEventsPage() {
           <Button 
             variant="outline" 
             size="icon" 
-            className="rounded-xl h-11 w-11"
-            onClick={fetchNews}
-            disabled={isLoading}
+            className="rounded-xl h-11 w-11 relative"
+            onClick={() => fetchNews()}
+            disabled={isRefreshing}
           >
-            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+            <RefreshCw className={`w-5 h-5 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+              </span>
+            )}
           </Button>
           <Button variant="outline" size="icon" className="rounded-xl h-11 w-11">
             <Bell className="w-5 h-5" />
@@ -96,15 +132,22 @@ export default function NewsAndEventsPage() {
       {isLoading ? (
         <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
           <Loader2 className="w-12 h-12 text-primary animate-spin" />
-          <p className="text-muted-foreground font-medium">Aggregating the latest global and academic updates...</p>
+          <p className="text-muted-foreground font-medium text-center max-w-xs">
+            Aggregating latest global and academic updates...
+          </p>
         </div>
       ) : (
         <div className="grid lg:grid-cols-3 gap-8">
           {/* News Feed */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-5 h-5 text-accent" />
-              <h2 className="text-xl font-headline font-bold">Latest Headlines</h2>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-accent" />
+                <h2 className="text-xl font-headline font-bold">Latest Headlines</h2>
+              </div>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                Auto-sync active (5m)
+              </span>
             </div>
 
             <div className="space-y-6">
@@ -148,6 +191,7 @@ export default function NewsAndEventsPage() {
               ))}
               {filteredNews?.length === 0 && (
                 <div className="text-center py-20 opacity-50">
+                  <Globe className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                   <p>No news items match your search.</p>
                 </div>
               )}
